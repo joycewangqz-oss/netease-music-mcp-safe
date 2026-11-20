@@ -4140,10 +4140,26 @@ def _execute_direct_write(operation: str, raw_arguments: dict[str, Any]) -> str:
 
 
 def available_tools() -> list[dict[str, Any]]:
-    return READ_TOOLS if READ_ONLY else READ_TOOLS + WRITE_TOOLS
+    tools = READ_TOOLS if READ_ONLY else READ_TOOLS + WRITE_TOOLS
+    return [tool for tool in tools if _tool_enabled(tool["name"])]
+
+
+def _tool_enabled(name: str) -> bool:
+    if os.environ.get("MCP_DISABLE_PODCASTS", "false").lower() == "true" and name in {
+        "list_my_subscribed_podcasts", "get_podcast_programs", "get_podcast_program",
+        "get_podcast_program_details", "search_podcasts", "search_podcast_programs",
+        "get_recent_podcast_plays",
+    }:
+        return False
+    allowed = os.environ.get("MCP_ALLOWED_WRITE_TOOLS", "").strip()
+    if allowed and name in WRITE_TOOL_NAMES:
+        return name in {item.strip() for item in allowed.split(",") if item.strip()}
+    return True
 
 
 def call_tool(name: str, arguments: dict[str, Any]) -> str:
+    if not _tool_enabled(name):
+        raise PermissionError("This tool is disabled by the deployment configuration.")
     if name in WRITE_TOOL_NAMES and READ_ONLY:
         raise PermissionError("Write tools are disabled. Set MCP_READ_ONLY=false to enable them.")
     if name in WRITE_TOOL_NAMES:
